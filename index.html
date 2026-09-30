@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>系统安全扫描</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{background:#0a0a0f;font-family:'Courier New',monospace;overflow:hidden;color:#00ff41}
+#app{position:relative;width:100vw;height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px}
+
+/* 启动屏 */
+#start-screen{text-align:center}
+#start-screen h1{font-size:36px;color:#00ff41;text-shadow:0 0 20px #00ff41;margin-bottom:10px;animation:glow 2s ease-in-out infinite}
+#start-screen .sub{font-size:14px;color:#00cc33;opacity:.8;margin-bottom:40px}
+@keyframes glow{0%,100%{text-shadow:0 0 20px #00ff41,0 0 40px #00ff41}50%{text-shadow:0 0 10px #00ff41,0 0 20px #00ff41}}
+.scan-btn{background:transparent;border:2px solid #00ff41;color:#00ff41;font-size:20px;font-weight:bold;padding:16px 48px;border-radius:8px;cursor:pointer;font-family:inherit;transition:all .2s;letter-spacing:4px}
+.scan-btn:hover{background:#00ff41;color:#0a0a0f;box-shadow:0 0 30px #00ff41}
+.scan-btn:active{transform:scale(.95)}
+
+/* 扫描屏 */
+#scan-screen{display:none;width:100%;max-width:600px}
+.scan-header{display:flex;align-items:center;gap:12px;margin-bottom:20px}
+.scan-header .icon{width:32px;height:32px;border:2px solid #00ff41;border-radius:50%;display:flex;align-items:center;justify-content:center;animation:spin 2s linear infinite}
+@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+.scan-header .title{font-size:18px;color:#00ff41}
+.progress-bar{width:100%;height:20px;border:2px solid #00ff41;border-radius:10px;overflow:hidden;margin-bottom:10px;background:rgba(0,255,65,.05)}
+.progress-fill{height:100%;background:#00ff41;width:0%;transition:width .3s;border-radius:8px;box-shadow:0 0 10px #00ff41}
+.progress-text{font-size:12px;color:#00cc33;margin-bottom:20px;text-align:right}
+
+/* 威胁列表 */
+.threats{list-style:none;max-height:300px;overflow-y:auto;margin-bottom:20px}
+.threats li{padding:10px 14px;border:1px solid;border-radius:6px;margin-bottom:8px;font-size:13px;animation:slideIn .3s ease-out;display:flex;align-items:center;gap:10px}
+@keyframes slideIn{from{opacity:0;transform:translateX(-20px)}to{opacity:1;transform:translateX(0)}}
+.threats li.critical{border-color:#ff4444;color:#ff4444;background:rgba(255,68,68,.08)}
+.threats li.high{border-color:#ff8800;color:#ff8800;background:rgba(255,136,0,.08)}
+.threats li.medium{border-color:#ffdd00;color:#ffdd00;background:rgba(255,221,0,.08)}
+.threats li .dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.threats li.critical .dot{background:#ff4444;box-shadow:0 0 6px #ff4444}
+.threats li.high .dot{background:#ff8800;box-shadow:0 0 6px #ff8800}
+.threats li.medium .dot{background:#ffdd00;box-shadow:0 0 6px #ffdd00}
+.threats li .name{flex:1}
+.threats li .type{font-size:11px;opacity:.7}
+
+/* 结果屏 */
+#result-screen{display:none;text-align:center;max-width:500px}
+#result-screen h2{font-size:28px;margin-bottom:16px}
+#result-screen .verdict{font-size:16px;line-height:1.8;padding:20px;border-radius:12px;margin-bottom:24px;background:rgba(0,255,65,.05);border:1px solid #00ff41}
+#result-screen .verdict.danger{background:rgba(255,68,68,.08);border-color:#ff4444;color:#ff4444}
+#result-screen .actions{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+#result-screen .act-btn{border:2px solid;background:transparent;font-size:14px;padding:12px 24px;border-radius:8px;cursor:pointer;font-family:inherit;transition:all .2s}
+#result-screen .act-btn.primary{border-color:#00ff41;color:#00ff41}
+#result-screen .act-btn.primary:hover{background:#00ff41;color:#0a0a0f}
+#result-screen .act-btn.secondary{border-color:#666;color:#666}
+#result-screen .act-btn.secondary:hover{background:#666;color:#fff}
+
+/* 扫描线动画 */
+.scan-line{position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,#00ff41,transparent);animation:scanLine 3s linear infinite;opacity:.5;pointer-events:none}
+@keyframes scanLine{from{top:0}to{top:100%}}
+
+/* 矩阵 rain */
+.matrix{position:fixed;inset:0;pointer-events:none;opacity:.03;z-index:0}
+</style>
+</head>
+<body>
+<canvas class="matrix"></canvas>
+<div class="scan-line"></div>
+<div id="app">
+
+<!-- 启动屏 -->
+<div id="start-screen">
+<h1>🛡 系统安全扫描</h1>
+<p class="sub">深度检测系统威胁与异常行为</p>
+<button class="scan-btn" id="startBtn">立即扫描</button>
+</div>
+
+<!-- 扫描屏 -->
+<div id="scan-screen">
+<div class="scan-header">
+<div class="icon">⟳</div>
+<div class="title">正在扫描系统...</div>
+</div>
+<div class="progress-bar">
+<div class="progress-fill" id="progressFill"></div>
+</div>
+<div class="progress-text" id="progressText">0% · 已扫描 0 个文件</div>
+<ul class="threats" id="threatList"></ul>
+</div>
+
+<!-- 结果屏 -->
+<div id="result-screen">
+<h2 id="resultTitle">扫描完成</h2>
+<div class="verdict" id="verdict"></div>
+<div class="actions">
+<button class="act-btn primary" id="restartBtn">再次扫描</button>
+<button class="act-btn secondary" id="ignoreBtn">忽略并继续摸鱼</button>
+</div>
+</div>
+
+</div>
+
+<script>
+var THREATS=[
+{name:'检测到过度摸鱼行为',type:'行为异常',level:'critical',desc:'CPU 使用率 99% 全部用于刷视频'},
+{name:'发现未完成的暑假作业',type:'文件风险',level:'high',desc:'检测到 3 份 .docx 文件创建于 30 天前且从未打开'},
+{name:'游戏进程正在后台运行',type:'进程注入',level:'critical',desc:'stick-fight.exe / talking-guy.exe 占用显存'},
+{name:'浏览器历史记录存在可疑关键词',type:'隐私泄露',level:'medium',desc:'搜索记录包含"怎么假装在学习"'},
+{name:'检测到"明天再说"综合征',type:'系统漏洞',level:'high',desc:'已连续 47 天触发此异常'},
+{name:'发现 3 个未回复的微信消息',type:'社交风险',level:'medium',desc:'对方已显示"对方正在输入..."'},
+{name:'检测到"再玩五分钟"无限循环',type:'逻辑炸弹',level:'critical',desc:'递归深度超过 9999 层，栈溢出风险'},
+{name:'发现凌晨 3 点的浏览器活动',type:'异常时段',level:'high',desc:'系统日志显示 03:14 有 47 次页面刷新'}
+];
+
+var state={scanning:false,progress:0,found:0,audioCtx:null};
+
+// Web Audio 音效
+function getAC(){if(!state.audioCtx)state.audioCtx=new(window.AudioContext||window.webkitAudioContext);return state.audioCtx}
+function beep(freq,dur,type,vol){
+var ac=getAC(),osc=ac.createOscillator(),gain=ac.createGain();
+osc.frequency.value=freq;osc.type=type||'square';
+gain.gain.value=vol||0.08;
+osc.connect(gain);gain.connect(ac.destination);
+osc.start();gain.gain.exponentialRampToValueAtTime(0.001,ac.currentTime+dur);
+osc.stop(ac.currentTime+dur);
+}
+function scanTick(){beep(1200+Math.random()*400,0.05,'square',0.03)}
+function threatAlert(){beep(800,0.15,'sawtooth',0.06);setTimeout(function(){beep(600,0.2,'sawtooth',0.05)},150)}
+function completeSound(){beep(523.25,0.15,'sine',0.08);setTimeout(function(){beep(659.25,0.15,'sine',0.08)},150);setTimeout(function(){beep(783.99,0.3,'sine',0.08)},300)}
+
+// 矩阵雨
+(function(){
+var c=document.querySelector('.matrix'),x=c.getContext('2d');
+c.width=window.innerWidth;c.height=window.innerHeight;
+var cols=Math.floor(c.width/14),drops=Array(cols).fill(0);
+function rain(){
+x.fillStyle='rgba(0,0,0,0.05)';x.fillRect(0,0,c.width,c.height);
+x.fillStyle='#00ff41';x.font='12px monospace';
+for(var i=0;i<drops.length;i++){
+var ch=String.fromCharCode(0x30A0+Math.random()*96);
+x.fillText(ch,i*14,drops[i]*14);
+if(drops[i]*14>c.height&&Math.random()>.975)drops[i]=0;
+drops[i]++;
+}
+requestAnimationFrame(rain);
+}
+rain();
+})();
+
+document.getElementById('startBtn').onclick=function(){
+document.getElementById('start-screen').style.display='none';
+document.getElementById('scan-screen').style.display='block';
+state.scanning=true;state.progress=0;state.found=0;
+document.getElementById('threatList').innerHTML='';
+scan();
+};
+
+function scan(){
+if(!state.scanning)return;
+state.progress+=Math.random()*3+0.5;
+if(state.progress>100)state.progress=100;
+document.getElementById('progressFill').style.width=state.progress+'%';
+document.getElementById('progressText').textContent=Math.floor(state.progress)+'% · 已扫描 '+Math.floor(state.progress*1847)+' 个文件';
+
+// 随机发现威胁
+if(state.found<THREATS.length&&Math.random()<0.12){
+var t=THREATS[state.found];
+var li=document.createElement('li');
+li.className=t.level;
+li.innerHTML='<div class="dot"></div><div class="name">'+t.name+'</div><div class="type">'+t.type+'</div>';
+document.getElementById('threatList').appendChild(li);
+li.scrollIntoView({behavior:'smooth',block:'nearest'});
+state.found++;
+threatAlert();
+}else if(state.progress<100){
+scanTick();
+}
+
+if(state.progress<100){
+setTimeout(scan,80+Math.random()*120);
+}else{
+setTimeout(showResult,600);
+}
+}
+
+function showResult(){
+state.scanning=false;
+document.getElementById('scan-screen').style.display='none';
+document.getElementById('result-screen').style.display='block';
+completeSound();
+
+var critical=THREATS.filter(function(t){return t.level==='critical'}).length;
+var high=THREATS.filter(function(t){return t.level==='high'}).length;
+
+var title=document.getElementById('resultTitle');
+var verdict=document.getElementById('verdict');
+
+if(critical>=3){
+title.textContent='⚠ 严重威胁已发现';
+verdict.className='verdict danger';
+verdict.innerHTML='检测到 <strong>'+state.found+'</strong> 个威胁<br><br>其中 <span style="color:#ff4444">'+critical+' 个严重</span>、<span style="color:#ff8800">'+high+' 个高危</span><br><br>建议：关掉这个页面，去把该做的事做了。或者继续摸鱼，反正你的人生你说了算。';
+}else{
+title.textContent='✓ 扫描完成';
+verdict.className='verdict';
+verdict.innerHTML='扫描完成，发现 <strong>'+state.found+'</strong> 个潜在风险<br><br>系统整体状态：<span style="color:#00ff41">勉强还行</span><br><br>建议：该摸鱼就摸鱼，但别忘了正事。';
+}
+}
+
+document.getElementById('restartBtn').onclick=function(){
+document.getElementById('result-screen').style.display='none';
+document.getElementById('start-screen').style.display='block';
+state.progress=0;state.found=0;
+};
+document.getElementById('ignoreBtn').onclick=function(){
+document.getElementById('result-screen').style.display='none';
+document.getElementById('start-screen').style.display='block';
+state.progress=0;state.found=0;
+};
+</script>
+</body>
+</html>
